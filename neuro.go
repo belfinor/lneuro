@@ -1,11 +1,12 @@
 package neuro
 
 // @author  Mikhail Kirillov <mikkirillov@yandex.ru>
-// @version 1.000
+// @version 1.001
 // @date    2019-03-28
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -106,87 +107,87 @@ func New(iInputCount, iHiddenCount, iOutputCount int, iRegression bool, iRate1, 
 	return net
 }
 
-func (self *Net) Forward(input []float64) (output []float64) {
-	if len(input)+1 != len(self.InputLayer) {
-		panic("amount of input variable doesn't match")
+func (nn *Net) Forward(input []float64) ([]float64, error) {
+	if len(input)+1 != len(nn.InputLayer) {
+		return nil, errors.New("amount of input variable doesn't match")
 	}
 	for i := 0; i < len(input); i++ {
-		self.InputLayer[i] = input[i]
+		nn.InputLayer[i] = input[i]
 	}
-	self.InputLayer[len(self.InputLayer)-1] = 1.0 //bias node for input layer
+	nn.InputLayer[len(nn.InputLayer)-1] = 1.0 //bias node for input layer
 
-	for i := 0; i < len(self.HiddenLayer)-1; i++ {
+	for i := 0; i < len(nn.HiddenLayer)-1; i++ {
 		sum := 0.0
-		for j := 0; j < len(self.InputLayer); j++ {
-			sum += self.InputLayer[j] * self.WeightHidden[i][j]
+		for j := 0; j < len(nn.InputLayer); j++ {
+			sum += nn.InputLayer[j] * nn.WeightHidden[i][j]
 		}
-		self.HiddenLayer[i] = sigmoid(sum)
+		nn.HiddenLayer[i] = sigmoid(sum)
 	}
 
-	self.HiddenLayer[len(self.HiddenLayer)-1] = 1.0 //bias node for hidden layer
-	for i := 0; i < len(self.OutputLayer); i++ {
+	nn.HiddenLayer[len(nn.HiddenLayer)-1] = 1.0 //bias node for hidden layer
+	for i := 0; i < len(nn.OutputLayer); i++ {
 		sum := 0.0
-		for j := 0; j < len(self.HiddenLayer); j++ {
-			sum += self.HiddenLayer[j] * self.WeightOutput[i][j]
+		for j := 0; j < len(nn.HiddenLayer); j++ {
+			sum += nn.HiddenLayer[j] * nn.WeightOutput[i][j]
 		}
-		if self.Regression {
-			self.OutputLayer[i] = sum
+		if nn.Regression {
+			nn.OutputLayer[i] = sum
 		} else {
-			self.OutputLayer[i] = sigmoid(sum)
+			nn.OutputLayer[i] = sigmoid(sum)
 		}
 	}
-	return self.OutputLayer[:]
+	return nn.OutputLayer[:], nil
 }
 
-func (self *Net) Feedback(target []float64) {
-	for i := 0; i < len(self.OutputLayer); i++ {
-		self.ErrOutput[i] = self.OutputLayer[i] - target[i]
+func (nn *Net) Feedback(target []float64) {
+	for i := 0; i < len(nn.OutputLayer); i++ {
+		nn.ErrOutput[i] = nn.OutputLayer[i] - target[i]
 	}
 
-	for i := 0; i < len(self.HiddenLayer)-1; i++ {
+	for i := 0; i < len(nn.HiddenLayer)-1; i++ {
 		err := 0.0
-		for j := 0; j < len(self.OutputLayer); j++ {
-			if self.Regression {
-				err += self.ErrOutput[j] * self.WeightOutput[j][i]
+		for j := 0; j < len(nn.OutputLayer); j++ {
+			if nn.Regression {
+				err += nn.ErrOutput[j] * nn.WeightOutput[j][i]
 			} else {
-				err += self.ErrOutput[j] * self.WeightOutput[j][i] * dsigmoid(self.OutputLayer[j])
+				err += nn.ErrOutput[j] * nn.WeightOutput[j][i] * dsigmoid(nn.OutputLayer[j])
 			}
 
 		}
-		self.ErrHidden[i] = err
+		nn.ErrHidden[i] = err
 	}
 
-	for i := 0; i < len(self.OutputLayer); i++ {
-		for j := 0; j < len(self.HiddenLayer); j++ {
+	for i := 0; i < len(nn.OutputLayer); i++ {
+		for j := 0; j < len(nn.HiddenLayer); j++ {
 			change := 0.0
 			delta := 0.0
-			if self.Regression {
-				delta = self.ErrOutput[i]
+			if nn.Regression {
+				delta = nn.ErrOutput[i]
 			} else {
-				delta = self.ErrOutput[i] * dsigmoid(self.OutputLayer[i])
+				delta = nn.ErrOutput[i] * dsigmoid(nn.OutputLayer[i])
 			}
-			change = self.Rate1*delta*self.HiddenLayer[j] + self.Rate2*self.LastChangeOutput[i][j]
-			self.WeightOutput[i][j] -= change
-			self.LastChangeOutput[i][j] = change
+			change = nn.Rate1*delta*nn.HiddenLayer[j] + nn.Rate2*nn.LastChangeOutput[i][j]
+			nn.WeightOutput[i][j] -= change
+			nn.LastChangeOutput[i][j] = change
 
 		}
 	}
 
-	for i := 0; i < len(self.HiddenLayer)-1; i++ {
-		for j := 0; j < len(self.InputLayer); j++ {
-			delta := self.ErrHidden[i] * dsigmoid(self.HiddenLayer[i])
-			change := self.Rate1*delta*self.InputLayer[j] + self.Rate2*self.LastChangeHidden[i][j]
-			self.WeightHidden[i][j] -= change
-			self.LastChangeHidden[i][j] = change
+	for i := 0; i < len(nn.HiddenLayer)-1; i++ {
+		for j := 0; j < len(nn.InputLayer); j++ {
+			delta := nn.ErrHidden[i] * dsigmoid(nn.HiddenLayer[i])
+			change := nn.Rate1*delta*nn.InputLayer[j] + nn.Rate2*nn.LastChangeHidden[i][j]
+			nn.WeightHidden[i][j] -= change
+			nn.LastChangeHidden[i][j] = change
 
 		}
 	}
 }
 
-func (self *Net) CalcError(target []float64) float64 {
+func (nn *Net) CalcError(target []float64) float64 {
 	errSum := 0.0
-	for i := 0; i < len(self.OutputLayer); i++ {
-		err := self.OutputLayer[i] - target[i]
+	for i := 0; i < len(nn.OutputLayer); i++ {
+		err := nn.OutputLayer[i] - target[i]
 		errSum += 0.5 * err * err
 	}
 	return errSum
@@ -205,12 +206,12 @@ func genRandomIdx(N int) []int {
 	return A
 }
 
-func (self *Net) Train(inputs [][]float64, targets [][]float64, iteration int) {
-	if len(inputs[0])+1 != len(self.InputLayer) {
-		panic("amount of input variable doesn't match")
+func (nn *Net) Train(inputs [][]float64, targets [][]float64, iteration int) error {
+	if len(inputs[0])+1 != len(nn.InputLayer) {
+		return errors.New("amount of input variable doesn't match")
 	}
-	if len(targets[0]) != len(self.OutputLayer) {
-		panic("amount of output variable doesn't match")
+	if len(targets[0]) != len(nn.OutputLayer) {
+		return errors.New("amount of output variable doesn't match")
 	}
 
 	iter_flag := -1
@@ -218,9 +219,9 @@ func (self *Net) Train(inputs [][]float64, targets [][]float64, iteration int) {
 		idx_ary := genRandomIdx(len(inputs))
 		cur_err := 0.0
 		for j := 0; j < len(inputs); j++ {
-			self.Forward(inputs[idx_ary[j]])
-			self.Feedback(targets[idx_ary[j]])
-			cur_err += self.CalcError(targets[idx_ary[j]])
+			nn.Forward(inputs[idx_ary[j]])
+			nn.Feedback(targets[idx_ary[j]])
+			cur_err += nn.CalcError(targets[idx_ary[j]])
 			if (j+1)%1000 == 0 {
 				if iter_flag != i {
 					fmt.Println("")
@@ -234,11 +235,12 @@ func (self *Net) Train(inputs [][]float64, targets [][]float64, iteration int) {
 		}
 	}
 	fmt.Println("\ndone.")
+	return nil
 }
 
-func (self *Net) TrainMap(inputs []map[int]float64, targets [][]float64, iteration int) {
-	if len(targets[0]) != len(self.OutputLayer) {
-		panic("amount of output variable doesn't match")
+func (nn *Net) TrainMap(inputs []map[int]float64, targets [][]float64, iteration int) error {
+	if len(targets[0]) != len(nn.OutputLayer) {
+		return errors.New("amount of output variable doesn't match")
 	}
 
 	iter_flag := -1
@@ -246,9 +248,9 @@ func (self *Net) TrainMap(inputs []map[int]float64, targets [][]float64, iterati
 		idx_ary := genRandomIdx(len(inputs))
 		cur_err := 0.0
 		for j := 0; j < len(inputs); j++ {
-			self.ForwardMap(inputs[idx_ary[j]])
-			self.FeedbackMap(targets[idx_ary[j]], inputs[idx_ary[j]])
-			cur_err += self.CalcError(targets[idx_ary[j]])
+			nn.ForwardMap(inputs[idx_ary[j]])
+			nn.FeedbackMap(targets[idx_ary[j]], inputs[idx_ary[j]])
+			cur_err += nn.CalcError(targets[idx_ary[j]])
 			if (j+1)%1000 == 0 {
 				if iter_flag != i {
 					fmt.Println("")
@@ -262,77 +264,78 @@ func (self *Net) TrainMap(inputs []map[int]float64, targets [][]float64, iterati
 		}
 	}
 	fmt.Println("\ndone.")
+	return nil
 }
 
-func (self *Net) ForwardMap(input map[int]float64) (output []float64) {
+func (nn *Net) ForwardMap(input map[int]float64) (output []float64) {
 	for k, v := range input {
-		self.InputLayer[k] = v
+		nn.InputLayer[k] = v
 	}
-	self.InputLayer[len(self.InputLayer)-1] = 1.0 //bias node for input layer
+	nn.InputLayer[len(nn.InputLayer)-1] = 1.0 //bias node for input layer
 
-	for i := 0; i < len(self.HiddenLayer)-1; i++ {
+	for i := 0; i < len(nn.HiddenLayer)-1; i++ {
 		sum := 0.0
 		for j, _ := range input {
-			sum += self.InputLayer[j] * self.WeightHidden[i][j]
+			sum += nn.InputLayer[j] * nn.WeightHidden[i][j]
 		}
-		self.HiddenLayer[i] = sigmoid(sum)
+		nn.HiddenLayer[i] = sigmoid(sum)
 	}
 
-	self.HiddenLayer[len(self.HiddenLayer)-1] = 1.0 //bias node for hidden layer
-	for i := 0; i < len(self.OutputLayer); i++ {
+	nn.HiddenLayer[len(nn.HiddenLayer)-1] = 1.0 //bias node for hidden layer
+	for i := 0; i < len(nn.OutputLayer); i++ {
 		sum := 0.0
-		for j := 0; j < len(self.HiddenLayer); j++ {
-			sum += self.HiddenLayer[j] * self.WeightOutput[i][j]
+		for j := 0; j < len(nn.HiddenLayer); j++ {
+			sum += nn.HiddenLayer[j] * nn.WeightOutput[i][j]
 		}
-		if self.Regression {
-			self.OutputLayer[i] = sum
+		if nn.Regression {
+			nn.OutputLayer[i] = sum
 		} else {
-			self.OutputLayer[i] = sigmoid(sum)
+			nn.OutputLayer[i] = sigmoid(sum)
 		}
 	}
-	return self.OutputLayer[:]
+	return nn.OutputLayer[:]
 }
 
-func (self *Net) FeedbackMap(target []float64, input map[int]float64) {
-	for i := 0; i < len(self.OutputLayer); i++ {
-		self.ErrOutput[i] = self.OutputLayer[i] - target[i]
+func (nn *Net) FeedbackMap(target []float64, input map[int]float64) {
+	for i := 0; i < len(nn.OutputLayer); i++ {
+		nn.ErrOutput[i] = nn.OutputLayer[i] - target[i]
 	}
 
-	for i := 0; i < len(self.HiddenLayer)-1; i++ {
+	for i := 0; i < len(nn.HiddenLayer)-1; i++ {
 		err := 0.0
-		for j := 0; j < len(self.OutputLayer); j++ {
-			if self.Regression {
-				err += self.ErrOutput[j] * self.WeightOutput[j][i]
+		for j := 0; j < len(nn.OutputLayer); j++ {
+			if nn.Regression {
+				err += nn.ErrOutput[j] * nn.WeightOutput[j][i]
 			} else {
-				err += self.ErrOutput[j] * self.WeightOutput[j][i] * dsigmoid(self.OutputLayer[j])
+				err += nn.ErrOutput[j] * nn.WeightOutput[j][i] * dsigmoid(nn.OutputLayer[j])
 			}
 
 		}
-		self.ErrHidden[i] = err
+		nn.ErrHidden[i] = err
 	}
 
-	for i := 0; i < len(self.OutputLayer); i++ {
-		for j := 0; j < len(self.HiddenLayer); j++ {
+	for i := 0; i < len(nn.OutputLayer); i++ {
+		for j := 0; j < len(nn.HiddenLayer); j++ {
 			change := 0.0
 			delta := 0.0
-			if self.Regression {
-				delta = self.ErrOutput[i]
+			if nn.Regression {
+				delta = nn.ErrOutput[i]
 			} else {
-				delta = self.ErrOutput[i] * dsigmoid(self.OutputLayer[i])
+				delta = nn.ErrOutput[i] * dsigmoid(nn.OutputLayer[i])
 			}
-			change = self.Rate1*delta*self.HiddenLayer[j] + self.Rate2*self.LastChangeOutput[i][j]
-			self.WeightOutput[i][j] -= change
-			self.LastChangeOutput[i][j] = change
+			change = nn.Rate1*delta*nn.HiddenLayer[j] + nn.Rate2*nn.LastChangeOutput[i][j]
+			nn.WeightOutput[i][j] -= change
+			nn.LastChangeOutput[i][j] = change
 
 		}
 	}
 
-	for i := 0; i < len(self.HiddenLayer)-1; i++ {
+	for i := 0; i < len(nn.HiddenLayer)-1; i++ {
 		for j, _ := range input {
-			delta := self.ErrHidden[i] * dsigmoid(self.HiddenLayer[i])
-			change := self.Rate1*delta*self.InputLayer[j] + self.Rate2*self.LastChangeHidden[i][j]
-			self.WeightHidden[i][j] -= change
-			self.LastChangeHidden[i][j] = change
+			delta := nn.ErrHidden[i] * dsigmoid(nn.HiddenLayer[i])
+			change := nn.Rate1*delta*nn.InputLayer[j] + nn.Rate2*nn.LastChangeHidden[i][j]
+			nn.WeightHidden[i][j] -= change
+			nn.LastChangeHidden[i][j] = change
 
 		}
 	}
